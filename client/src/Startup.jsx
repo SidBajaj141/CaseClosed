@@ -1,108 +1,185 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import io from "socket.io-client";
+import axios from "axios";
 
 const socket = io("http://localhost:5000");
 
 export default function Startup() {
-  const [roomId, setRoomId] = useState("");
-  const [players, setPlayers] = useState([]);
-  const [status, setStatus] = useState("");
   const navigate = useNavigate();
+  const [username, setUsername] = useState("");
+  const [roomCode, setRoomCode] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const [players, setPlayers] = useState([]);
 
+  // 🧩 Create room (via backend)
+  const handleCreateRoom = async () => {
+    if (!username.trim()) return alert("Enter username first");
+
+    try {
+      const res = await axios.post("http://localhost:5000/create-room");
+      const newRoomCode = res.data.roomCode;
+      setRoomCode(newRoomCode);
+      joinRoom(newRoomCode);
+    } catch (err) {
+      console.error("Room creation failed:", err);
+    }
+  };
+
+  // 🚪 Join existing room
+  const handleJoinRoom = () => {
+    if (!username.trim() || !roomCode.trim())
+      return alert("Enter both username and room code");
+    joinRoom(roomCode.trim().toUpperCase());
+  };
+
+  // 🔌 Common join logic
+  const joinRoom = (code) => {
+    socket.emit("joinRoom", { roomCode: code, username });
+    // ❌ Removed setIsCreating(true)
+  };
+
+  // 🧠 Socket listeners (registered once)
   useEffect(() => {
-    socket.on("roomUpdate", (updatedPlayers) => {
-      setPlayers(updatedPlayers);
-      setStatus(`Room: ${roomId} | Players: ${updatedPlayers.length}/4`);
+    socket.on("roomUpdate", (playersList) => {
+      setPlayers(playersList);
+      const isInRoom = playersList.some((p) => p.username === username);
+      if (isInRoom) setIsCreating(true);
+    });
+
+    socket.on("roomNotFound", () => {
+      alert("Room not found!");
+      setIsCreating(false);
     });
 
     socket.on("roomFull", () => {
-      setStatus("❌ Room is full (max 4 players)");
+      alert("Room is full!");
+      setIsCreating(false);
+    });
+
+    socket.on("usernameTaken", () => {
+      alert("That username already exists in this room. Please choose another one.");
+      setIsCreating(false);
     });
 
     socket.on("storyStart", () => {
-      navigate("/story");
+      navigate("/story", { state: { roomCode, username } });
     });
 
     return () => {
       socket.off("roomUpdate");
+      socket.off("roomNotFound");
       socket.off("roomFull");
+      socket.off("usernameTaken");
       socket.off("storyStart");
     };
-  }, [navigate, roomId]);
+  }, [username, roomCode, navigate]);
 
-  const handleJoin = () => {
-    if (!roomId.trim()) {
-      setStatus("⚠️ Enter a room code first");
-      return;
-    }
-    socket.emit("joinRoom", roomId.trim());
-    setStatus(`Joining room ${roomId}...`);
-  };
-
-  const handleCreate = async () => {
-  try {
-    const res = await fetch("http://localhost:5000/create-room", {
-      method: "POST",
-    });
-    const data = await res.json();
-    const newRoom = data.roomId;
-    setRoomId(newRoom);
-    socket.emit("joinRoom", newRoom);
-    setStatus(`✅ Room created: ${newRoom}`);
-  } catch (err) {
-    console.error("Error creating room:", err);
-    setStatus("❌ Failed to create room");
-  }
-};
-
-
-  const handleStart = () => {
-    if (players.length > 1) {
-      socket.emit("sendStoryReady", roomId);
-    } else {
-      setStatus("Need at least 2 players to start");
-    }
+  // 🟢 Start game
+  const startGame = () => {
+    socket.emit("sendStoryReady", roomCode);
   };
 
   return (
-    <div style={{ textAlign: "center", marginTop: "80px" }}>
-      <h1>🕵️ Case Closed – Lobby</h1>
-      <input
-        type="text"
-        placeholder="Enter or create room code"
-        value={roomId}
-        onChange={(e) => setRoomId(e.target.value)}
-        style={{ padding: "8px", fontSize: "16px", marginBottom: "10px" }}
-      />
-      <div>
-        <button onClick={handleJoin} style={{ margin: "5px", padding: "10px 20px" }}>
-          Join Room
-        </button>
-        <button onClick={handleCreate} style={{ margin: "5px", padding: "10px 20px" }}>
-          Create Room
-        </button>
-      </div>
+    <div style={styles.container}>
+      <h1 style={styles.title}>Case Closed 🎯</h1>
 
-      <p style={{ color: "#aaa" }}>{status}</p>
+      {!isCreating ? (
+        <>
+          <input
+            type="text"
+            placeholder="Enter username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={styles.input}
+          />
 
-      {players.length > 0 && (
-        <div style={{ marginTop: "20px" }}>
-          <h3>Players Connected:</h3>
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {players.map((id) => (
-              <li key={id} style={{ color: "#f3e0c5" }}>{id}</li>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <input
+              type="text"
+              placeholder="Room code (optional)"
+              value={roomCode}
+              onChange={(e) => setRoomCode(e.target.value)}
+              style={styles.input}
+            />
+            <button onClick={handleJoinRoom} style={styles.btn}>
+              Join
+            </button>
+            <button onClick={handleCreateRoom} style={styles.btnAlt}>
+              Create
+            </button>
+          </div>
+        </>
+      ) : (
+        <div style={styles.roomBox}>
+          <h2>Room Code: {roomCode}</h2>
+          <h3>Players Joined:</h3>
+          <ul>
+            {players.map((p) => (
+              <li key={p.socketId}>{p.username}</li>
             ))}
           </ul>
+
+          {players.length >= 2 && (
+            <button onClick={startGame} style={styles.startBtn}>
+              Start Game
+            </button>
+          )}
         </div>
       )}
-
-      <button
-        onClick={handleStart}
-        style={{ marginTop: "30px", padding: "10px 30px" }}
-      >
-        Start Story
-      </button>
     </div>
   );
 }
+
+const styles = {
+  container: {
+    textAlign: "center",
+    color: "#f3e0c5",
+    background: "#2b1d0e",
+    minHeight: "100vh",
+    padding: "3rem",
+    fontFamily: "serif",
+  },
+  title: { fontSize: "2.5rem", marginBottom: "2rem" },
+  input: {
+    padding: "10px",
+    borderRadius: "5px",
+    border: "1px solid #d4af37",
+    background: "#f3e0c5",
+    color: "#2b1d0e",
+    fontSize: "1rem",
+    marginBottom: "10px",
+  },
+  btn: {
+    padding: "10px 20px",
+    background: "#d4af37",
+    color: "#2b1d0e",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+  btnAlt: {
+    padding: "10px 20px",
+    background: "#8b0000",
+    color: "#f3e0c5",
+    border: "none",
+    borderRadius: "5px",
+    cursor: "pointer",
+  },
+  roomBox: {
+    border: "2px solid #d4af37",
+    padding: "1rem",
+    borderRadius: "10px",
+    background: "#3a2614",
+    display: "inline-block",
+  },
+  startBtn: {
+    padding: "10px 20px",
+    background: "#228b22",
+    color: "#fff",
+    border: "none",
+    borderRadius: "5px",
+    marginTop: "20px",
+    cursor: "pointer",
+  },
+};

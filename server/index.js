@@ -2,6 +2,11 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const connectDB = require("../config/db");
+const Room = require("../models/Room");
+const { nanoid } = require("nanoid");
+
+connectDB();
 
 const app = express();
 app.use(cors());
@@ -12,56 +17,88 @@ const io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-const rooms = {}; // { roomId: [socketIds...] }
-
-// ✅ API route to create unique room
-app.post("/create-room", (req, res) => {
-  let roomId;
-  do {
-    roomId = Math.random().toString(36).substring(2, 7);
-  } while (rooms[roomId]); // ensure uniqueness
-
-  rooms[roomId] = [];
-  res.json({ roomId });
+// ✅ Create a new unique room
+app.post("/create-room", async (req, res) => {
+  try {
+    const roomCode = nanoid(6).toUpperCase(); // e.g. "A1B2C3"
+    const newRoom = new Room({ roomCode, players: [] });
+    await newRoom.save();
+    console.log("✅ Room saved:", newRoom);
+    res.json({ roomCode });
+  } catch (err) {
+    console.error("❌ Room creation error:", err);
+    res.status(500).json({ error: "Failed to create room" });
+  }
 });
 
 // 🔌 Socket events
 io.on("connection", (socket) => {
   console.log(`🟢 Player connected: ${socket.id}`);
 
-  socket.on("joinRoom", (roomId) => {
-    if (!rooms[roomId]) {
-      socket.emit("roomNotFound");
-      return;
+  socket.on("joinRoom", async ({ roomCode, username }) => {
+  try {
+    const room = await Room.findOne({ roomCode });
+    if (!room) return socket.emit("roomNotFound");
+    if (room.players.length >= 4) return socket.emit("roomFull");
+
+    // ✅ Check if username already exists in the room
+    const usernameExists = room.players.some(
+      (p) => p.username.trim().toLowerCase() === username.trim().toLowerCase()
+    );
+    if (usernameExists) {
+      socket.emit("usernameTaken");
+      console.log(`⚠️ Username '${username}' already taken in room ${roomCode}`);
+      return; // stop right here — don’t add
     }
 
-    if (rooms[roomId].length >= 4) {
-      socket.emit("roomFull");
-      return;
-    }
+    // ✅ Safe to add now
+    room.players.push({ username, socketId: socket.id });
+    await room.save();
 
-    rooms[roomId].push(socket.id);
-    socket.join(roomId);
-    io.to(roomId).emit("roomUpdate", rooms[roomId]);
-    console.log(`Player ${socket.id} joined room ${roomId}`);
-  });
+    socket.join(roomCode);
+    io.to(roomCode).emit("roomUpdate", room.players);
+    console.log(`👤 ${username} joined ${roomCode}`);
+  } catch (err) {
+    console.error("Join room error:", err);
+  }
+});
 
-  socket.on("sendStoryReady", (roomId) => {
-    io.to(roomId).emit("storyStart");
+
+
+  socket.on("sendStoryReady", async (roomCode) => {
+     const room = rooms[roomCode];
+    if (!room) return;
+
+    // Assign roles dynamically
+    const roles = ["Detective", "Hacker", "Analyst", "Forensic"];
+    room.players.forEach((player, i) => {
+      player.role = roles[i % roles.length];
+      io.to(player.socketId).emit("roleAssigned", {
+        role: player.role,
+        roomCode,
+      });
+    });
+    io.to(roomCode).emit("storyStart");
   });
 
   // WebRTC Signaling
-  socket.on("offer", (data) => socket.to(data.roomId).emit("offer", data));
-  socket.on("answer", (data) => socket.to(data.roomId).emit("answer", data));
-  socket.on("ice-candidate", (data) => socket.to(data.roomId).emit("ice-candidate", data));
+  socket.on("offer", (data) => socket.to(data.roomCode).emit("offer", data));
+  socket.on("answer", (data) => socket.to(data.roomCode).emit("answer", data));
+  socket.on("ice-candidate", (data) => socket.to(data.roomCode).emit("ice-candidate", data));
 
-  socket.on("disconnect", () => {
-    for (const roomId in rooms) {
-      rooms[roomId] = rooms[roomId].filter((id) => id !== socket.id);
-      if (rooms[roomId].length === 0) delete rooms[roomId];
-      else io.to(roomId).emit("roomUpdate", rooms[roomId]);
+  socket.on("disconnect", async () => {
+    try {
+      const room = await Room.findOne({ "players.socketId": socket.id });
+      if (room) {
+        room.players = room.players.filter((p) => p.socketId !== socket.id);
+        await room.save();
+        io.to(room.roomCode).emit("roomUpdate", room.players);
+        if (room.players.length === 0) await Room.deleteOne({ _id: room._id });
+      }
+      console.log(`🔴 Player disconnected: ${socket.id}`);
+    } catch (err) {
+      console.error("Disconnect cleanup error:", err);
     }
-    console.log(`🔴 Player disconnected: ${socket.id}`);
   });
 });
 
