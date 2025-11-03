@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const playerSchema = new mongoose.Schema({
   username: { type: String, required: true },
   socketId: { type: String },
+  role: { type: String, default: null }, // 👈 add here
 });
 
 const roomSchema = new mongoose.Schema({

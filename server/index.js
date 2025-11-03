@@ -30,7 +30,26 @@ app.post("/create-room", async (req, res) => {
     res.status(500).json({ error: "Failed to create room" });
   }
 });
+app.get("/get-role/:roomCode/:username", async (req, res) => {
+  try {
+    const { roomCode, username } = req.params;
+    const room = await Room.findOne({ roomCode });
 
+    if (!room) return res.status(404).json({ error: "Room not found" });
+
+    const player = room.players.find(
+      (p) => p.username.trim().toLowerCase() === username.trim().toLowerCase()
+    );
+
+    if (!player || !player.role)
+      return res.status(404).json({ error: "Role not assigned yet" });
+
+    res.json({ role: player.role });
+  } catch (err) {
+    console.error("❌ Error fetching role:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
 // 🔌 Socket events
 io.on("connection", (socket) => {
   console.log(`🟢 Player connected: ${socket.id}`);
@@ -66,20 +85,29 @@ io.on("connection", (socket) => {
 
 
   socket.on("sendStoryReady", async (roomCode) => {
-     const room = rooms[roomCode];
+  try {
+    const room = await Room.findOne({ roomCode });
     if (!room) return;
 
-    // Assign roles dynamically
-    const roles = ["Detective", "Hacker", "Analyst", "Forensic"];
+    const roles = ["Interogator", "SketchArtist", "Technical", "Forensic"];
+
     room.players.forEach((player, i) => {
       player.role = roles[i % roles.length];
       io.to(player.socketId).emit("roleAssigned", {
         role: player.role,
         roomCode,
+        username: player.username, 
       });
     });
+    
+    await room.save(); // persist assigned roles
     io.to(roomCode).emit("storyStart");
-  });
+    console.log(`🕵️ Roles assigned and story started for ${roomCode}`);
+  } catch (err) {
+    console.error("sendStoryReady error:", err);
+  }
+});
+
 
   // WebRTC Signaling
   socket.on("offer", (data) => socket.to(data.roomCode).emit("offer", data));

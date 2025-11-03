@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import io from "socket.io-client";
 import axios from "axios";
-
-const socket = io("http://localhost:5000");
+import { socket } from "./socket"; // ✅ shared socket import
 
 export default function Startup() {
   const navigate = useNavigate();
@@ -12,10 +10,9 @@ export default function Startup() {
   const [isCreating, setIsCreating] = useState(false);
   const [players, setPlayers] = useState([]);
 
-  // 🧩 Create room (via backend)
+  // 🧩 Create new room
   const handleCreateRoom = async () => {
     if (!username.trim()) return alert("Enter username first");
-
     try {
       const res = await axios.post("http://localhost:5000/create-room");
       const newRoomCode = res.data.roomCode;
@@ -26,7 +23,7 @@ export default function Startup() {
     }
   };
 
-  // 🚪 Join existing room
+  // 🚪 Join room
   const handleJoinRoom = () => {
     if (!username.trim() || !roomCode.trim())
       return alert("Enter both username and room code");
@@ -35,15 +32,24 @@ export default function Startup() {
 
   // 🔌 Common join logic
   const joinRoom = (code) => {
+    if (!socket.connected) {
+      socket.connect();
+      console.log("🔌 Connected to backend socket");
+    }
+
+    console.log(`📤 Joining room ${code} as ${username}`);
     socket.emit("joinRoom", { roomCode: code, username });
-    // ❌ Removed setIsCreating(true)
   };
 
-  // 🧠 Socket listeners (registered once)
+  // 🎧 Socket event listeners
   useEffect(() => {
     socket.on("roomUpdate", (playersList) => {
+      console.log("👥 Updated players:", playersList);
       setPlayers(playersList);
-      const isInRoom = playersList.some((p) => p.username === username);
+
+      const isInRoom = playersList.some(
+        (p) => p.username.trim().toLowerCase() === username.trim().toLowerCase()
+      );
       if (isInRoom) setIsCreating(true);
     });
 
@@ -62,7 +68,9 @@ export default function Startup() {
       setIsCreating(false);
     });
 
+    // ✅ Go to story page when all ready
     socket.on("storyStart", () => {
+      console.log("🎬 Story starting — navigating...");
       navigate("/story", { state: { roomCode, username } });
     });
 
@@ -77,6 +85,7 @@ export default function Startup() {
 
   // 🟢 Start game
   const startGame = () => {
+    console.log("🚀 Starting game for room", roomCode);
     socket.emit("sendStoryReady", roomCode);
   };
 
