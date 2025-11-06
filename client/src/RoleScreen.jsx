@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { socket } from "./socket.js";
+import bgImage from "./assets/bgCommon.png";
 
 export default function RoleScreen() {
   const { state } = useLocation();
@@ -16,7 +17,6 @@ export default function RoleScreen() {
 
     console.log("🧭 Listening for roles in room:", roomCode);
 
-    // 1️⃣ Try to receive the role via socket
     socket.on("roleAssigned", (data) => {
       console.log("📩 roleAssigned received:", data);
       if (data.roomCode === roomCode && data.username === username) {
@@ -25,7 +25,6 @@ export default function RoleScreen() {
       }
     });
 
-    // 2️⃣ If no role arrives in 2 seconds, fallback to DB fetch
     const fallbackTimer = setTimeout(async () => {
       if (!role) {
         console.log("⏳ No socket role received — fetching from DB...");
@@ -59,46 +58,87 @@ export default function RoleScreen() {
   };
 
   return (
-    <div style={styles.container}>
-      <h1 style={styles.title}>
-        {role ? `Your Role: ${role}` : "Assigning your role..."}
-      </h1>
-      {!role && (
-        <p style={styles.subText}>
-          Waiting for the server to assign roles...
-        </p>
-      )}
-      {role && (
-        <button style={styles.btn} onClick={startMiniGame}>
-          Proceed to Mission
-        </button>
-      )}
+    <div
+      style={{
+        ...styles.container,
+        backgroundImage: `url(${bgImage})`,
+      }}
+    >
+      <div style={styles.overlay}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>
+            {role ? `Your Role: ${role}` : "Assigning your role..."}
+          </h1>
+
+          {!role && (
+            <p style={styles.subText}>
+              Please stand by.
+            </p>
+          )}
+
+          {role && (
+            <button style={styles.btn} onClick={startMiniGame}>
+              Proceed to Mission
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 const styles = {
   container: {
-    textAlign: "center",
-    background: "#1a1a1a",
-    color: "#f3e0c5",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
     minHeight: "100vh",
+    margin: 0,
+    padding: 0,
     display: "flex",
-    flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
-    padding: "2rem",
+    overflow: "hidden",
   },
-  title: { fontSize: "2rem", marginBottom: "1rem" },
-  subText: { color: "#bba98a", marginBottom: "2rem" },
-  btn: {
-    padding: "12px 24px",
-    background: "#d4af37",
-    border: "none",
-    borderRadius: "8px",
-    color: "#2b1d0e",
+  overlay: {
+    background: "rgba(0, 0, 0, 0.8)",
+    width: "100%",
+    height: "100%",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  card: {
+    background: "rgba(20, 20, 20, 0.9)",
+    border: "3px solid #d4af37",
+    borderRadius: "15px",
+    padding: "3rem 4rem",
+    boxShadow: "0 0 25px rgba(212, 175, 55, 0.4)",
+    color: "#f3e0c5",
+    textAlign: "center",
+    maxWidth: "700px",
+  },
+  title: {
+    fontSize: "2.8rem",
+    marginBottom: "1.5rem",
+    fontFamily: "'Courier New', monospace",
+  },
+  subText: {
     fontSize: "1.2rem",
+    color: "#bba98a",
+    marginBottom: "2rem",
+    lineHeight: "1.8",
+    fontFamily: "'Courier New', monospace",
+  },
+  btn: {
+    padding: "14px 30px",
+    background: "#d4af37",
+    border: "2px solid #b88b2b",
+    borderRadius: "10px",
+    color: "#0a0a0a",
+    fontSize: "1.3rem",
     cursor: "pointer",
     fontWeight: "bold",
+    transition: "all 0.2s ease",
   },
 };

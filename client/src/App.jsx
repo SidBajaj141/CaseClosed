@@ -7,6 +7,7 @@ import Fingerprint from "./games/forensic.jsx";
 import PurbleShopLogic from "./games/sketchArtist.jsx";
 import RoleScreen from "./RoleScreen.jsx";
 import Interrogator from "./games/interrogator.jsx"
+import ChatRoom from "./chatroom.jsx";
 export default function App() {
   return (
     <Router>
@@ -18,7 +19,8 @@ export default function App() {
         <Route path="/forensic" element={<Fingerprint />} />
         <Route path="/technical" element={<Code />} />
         <Route path="/sketchartist" element={<PurbleShopLogic />} />
-        <Route path="/interrogator" element={<Interrogator />} />
+        <Route path="/interogator" element={<Interrogator />} />
+        <Route path="/chatroom" element={<ChatRoom />} />
       </Routes>
     </Router>
   );

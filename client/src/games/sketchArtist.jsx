@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useLocation,useNavigate } from "react-router-dom"; // 👈 import navigation hook
 
 // Add image paths for your assets
 const options = {
@@ -26,14 +27,18 @@ const randomSuspect = () => ({
 });
 
 export default function PurbleShopLogic() {
+  const { state } = useLocation(); 
+  const { username, roomCode } = state || {};
+  const navigate = useNavigate(); // 👈 initialize navigate function
   const [suspect] = useState(randomSuspect());
   const [guess, setGuess] = useState([options.face[0], options.eyes[0], options.hair[0]]);
   const [attempts, setAttempts] = useState(0);
   const [history, setHistory] = useState([]);
   const maxAttempts = 8;
   const [message, setMessage] = useState("");
+  const [gameOver, setGameOver] = useState(false);
+  const [gameResult, setGameResult] = useState(null); // 'win' or 'lose'
 
-  // Cycle forward/backward for a given attribute
   const cycleOption = (idx, direction = 1) => {
     const cat = Object.keys(options)[idx];
     const currentIndex = options[cat].findIndex((o) => o.name === guess[idx].name);
@@ -44,7 +49,7 @@ export default function PurbleShopLogic() {
   };
 
   const checkGuess = () => {
-    if (attempts >= maxAttempts) return;
+    if (attempts >= maxAttempts || gameOver) return;
 
     let correctCount = 0;
     guess.forEach((val, idx) => {
@@ -55,13 +60,21 @@ export default function PurbleShopLogic() {
     setHistory([...history, { guess: [...guess], correctCount }]);
     setAttempts(attempts + 1);
 
-    if (correctCount === 3) setMessage("✅ Correct! You matched the suspect!");
-    else if (attempts + 1 === maxAttempts)
-      setMessage(`❌ Out of attempts! Suspect was: Face-${suspect.face.label}, Eyes-${suspect.eyes.label}, Hair-${suspect.hair.label}`);
-    else setMessage(`You have ${correctCount} correct attributes`);
+    if (correctCount === 3) {
+      setMessage("✅ Correct! You matched the suspect!");
+      setGameOver(true);
+      setGameResult("win");
+    } else if (attempts + 1 === maxAttempts) {
+      setMessage(
+        `❌ Out of attempts! Suspect was: Face-${suspect.face.label}, Eyes-${suspect.eyes.label}, Hair-${suspect.hair.label}`
+      );
+      setGameOver(true);
+      setGameResult("lose");
+    } else {
+      setMessage(`You have ${correctCount} correct attributes`);
+    }
   };
 
-  // Render a layered preview image, optional scale for history
   const renderPreview = (g, scale = 1) => (
     <div
       style={{
@@ -83,7 +96,6 @@ export default function PurbleShopLogic() {
           zIndex: 1,
         }}
       />
-      {/* Eyes */}
       <img
         src={g[1].img}
         alt="Left Eye"
@@ -109,7 +121,6 @@ export default function PurbleShopLogic() {
           zIndex: 2,
         }}
       />
-      {/* Hair */}
       <img
         src={g[2].img}
         alt="Hair"
@@ -144,51 +155,142 @@ export default function PurbleShopLogic() {
       <div className="text-center">
         <h2 style={{ marginBottom: "1rem" }}>👤 Sketch Artist</h2>
 
-        {/* Shifted container */}
         <div style={{ marginTop: "20%" }}>
-          {/* Preview Box */}
           <div style={{ margin: "1rem auto" }}>{renderPreview(guess)}</div>
 
-          {/* Arrow Controls */}
-          {["Face", "Eyes", "Hair"].map((cat, idx) => (
+          {!gameOver && (
+            <>
+              {["Face", "Eyes", "Hair"].map((cat, idx) => (
+                <div
+                  key={cat}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "1rem",
+                    marginBottom: "1rem",
+                  }}
+                >
+                  <button onClick={() => cycleOption(idx, -1)}>&lt;</button>
+                  <span style={{ width: "80px" }}>{guess[idx].label}</span>
+                  <button onClick={() => cycleOption(idx, 1)}>&gt;</button>
+                </div>
+              ))}
+
+              <button
+                onClick={checkGuess}
+                style={{
+                  marginTop: "1rem",
+                  padding: "10px 20px",
+                  background: "#d4af37",
+                  border: "2px solid #b88b2b",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                Confirm Guess
+              </button>
+              <p style={{ marginTop: "1rem" }}>
+                Attempts: {attempts}/{maxAttempts}
+              </p>
+            </>
+          )}
+
+          {message && (
+            <p style={{ marginTop: "0.5rem", fontWeight: "bold" }}>{message}</p>
+          )}
+
+          {/* 🧩 NEW: Clue + Continue button */}
+          {gameOver && (
             <div
-              key={cat}
-              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "1rem", marginBottom: "1rem" }}
+              style={{
+                marginTop: "2rem",
+                padding: "1.5rem",
+                backgroundColor: "#1e130a",
+                border: "2px solid #d4af37",
+                borderRadius: "8px",
+                textAlign: "left",
+                width: "320px",
+              }}
             >
-              <button onClick={() => cycleOption(idx, -1)}>&lt;</button>
-              <span style={{ width: "80px" }}>{guess[idx].label}</span>
-              <button onClick={() => cycleOption(idx, 1)}>&gt;</button>
+              {gameResult === "win" ? (
+                <>
+                  <h3 style={{ color: "#d4af37", marginBottom: "0.5rem" }}>
+                    [WITNESS COMPOSITE]
+                  </h3>
+                  <p style={{ fontSize: "0.9rem", lineHeight: "1.4rem" }}>
+                    A janitor cleaning the 87th-floor stairwell saw someone dash
+                    from the 88th-floor emergency exit around 11:50 PM. The
+                    janitor was flustered and only caught a glimpse.
+                    <br />
+                    <br />
+                    Your composite sketch, based on the janitor's panicked
+                    description, shows a person with:
+                    <br />
+                    <br />
+                    • A sharp, defined jawline. <br />
+                    • Short, sleek hair, possibly tied back. <br />
+                    • Notably expensive-looking "augmented-reality" glasses,
+                    glowing faintly blue. <br />
+                    <br />
+                    (Of the suspects, only <b>Evelyn Reed</b> wears that specific,
+                    high-fashion brand of AR glasses.)
+                  </p>
+                </>
+              ) : (
+                <h3 style={{ color: "#ff4444", textAlign: "center" }}>
+                  ❌ Failed to identify the suspect.
+                </h3>
+              )}
+
+              {/* Continue button */}
+              <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
+                <button
+                  onClick={() => {
+  console.log("Navigating to chatroom with:", { roomCode, username });
+  navigate("/chatroom", { state: { roomCode, username } });
+}}
+                  style={{
+                    padding: "10px 25px",
+                    background: "#d4af37",
+                    border: "2px solid #b88b2b",
+                    borderRadius: "6px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  Continue →
+                </button>
+              </div>
             </div>
-          ))}
-
-          <button
-            onClick={checkGuess}
-            style={{
-              marginTop: "1rem",
-              padding: "10px 20px",
-              background: "#d4af37",
-              border: "2px solid #b88b2b",
-              fontWeight: "bold",
-              cursor: "pointer",
-            }}
-          >
-            Confirm Guess
-          </button>
-
-          {/* Attempts line moved below submit button */}
-          <p style={{ marginTop: "1rem" }}>Attempts: {attempts}/{maxAttempts}</p>
-          {message && <p style={{ marginTop: "0.5rem", fontWeight: "bold" }}>{message}</p>}
+          )}
         </div>
       </div>
 
       {/* Right: History */}
-      <div style={{ textAlign: "left", backgroundColor: "#d4af37", padding: "1rem", borderRadius: "8px" }}>
+      <div
+        style={{
+          textAlign: "left",
+          backgroundColor: "#d4af37",
+          padding: "1rem",
+          borderRadius: "8px",
+        }}
+      >
         <h3 style={{ marginBottom: "1rem" }}>Previous Guesses</h3>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
           {history.map((h, idx) => (
-            <div key={idx} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              {renderPreview(h.guess, 0.3)} {/* 60% size for history */}
-              <span style={{ fontWeight: "bold", marginLeft: "0.5rem" }}>{h.correctCount} correct</span>
+            <div
+              key={idx}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "0.5rem",
+              }}
+            >
+              {renderPreview(h.guess, 0.3)}
+              <span style={{ fontWeight: "bold", marginLeft: "0.5rem" }}>
+                {h.correctCount} correct
+              </span>
             </div>
           ))}
         </div>

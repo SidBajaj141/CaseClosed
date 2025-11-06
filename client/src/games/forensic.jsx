@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useLocation,useNavigate } from "react-router-dom";
 
-// Example: fingerprint slices (replace with actual image URLs)
 const slices = [
   "src/assets/Fingerprints/00.png",
   "src/assets/Fingerprints/01.png",
@@ -9,25 +9,26 @@ const slices = [
   "src/assets/Fingerprints/04.png",
 ];
 
-// Correct order
 const correctOrder = [0, 1, 2, 3, 4];
 
-// Utility: randomize initial state
 const getRandomSlots = () =>
   Array.from({ length: correctOrder.length }, () =>
     Math.floor(Math.random() * slices.length)
   );
 
 export default function Fingerprint() {
+  const { state } = useLocation(); 
+  const { username, roomCode } = state || {};
   const [slots, setSlots] = useState(getRandomSlots);
   const [msg, setMsg] = useState("");
   const [timeLeft, setTimeLeft] = useState(15);
   const [gameOver, setGameOver] = useState(false);
-  const [started, setStarted] = useState(false); // ⬅ track if game has started
+  const [started, setStarted] = useState(false);
+  const [solved, setSolved] = useState(false);
+  const navigate = useNavigate();
 
-  // Timer countdown
   useEffect(() => {
-    if (!started || gameOver) return; // ⬅ timer only runs after first move & while active
+    if (!started || gameOver) return;
     if (timeLeft <= 0) {
       setGameOver(true);
       setMsg("⏰ Time's up! Puzzle failed.");
@@ -39,7 +40,7 @@ export default function Fingerprint() {
 
   const changeSlice = (slotIndex, direction) => {
     if (gameOver) return;
-    if (!started) setStarted(true); // ⬅ first interaction triggers timer
+    if (!started) setStarted(true);
     setSlots((prev) => {
       const newSlots = [...prev];
       newSlots[slotIndex] =
@@ -53,6 +54,7 @@ export default function Fingerprint() {
     const isCorrect = slots.every((val, i) => val === correctOrder[i]);
     if (isCorrect) {
       setMsg("✅ Fingerprint Identified");
+      setSolved(true);
       setGameOver(true);
     } else {
       setMsg("❌ Incorrect, try again");
@@ -64,8 +66,10 @@ export default function Fingerprint() {
     setMsg("");
     setTimeLeft(15);
     setGameOver(false);
-    setStarted(false); // ⬅ wait again for first move
+    setStarted(false);
+    setSolved(false);
   };
+
 
   return (
     <div
@@ -125,23 +129,75 @@ export default function Fingerprint() {
       </div>
 
       <div style={{ marginTop: "20px" }}>
-        <button onClick={submit} style={actionButtonStyle} disabled={gameOver}>
-          Submit
-        </button>
-        <button
-          onClick={reset}
-          style={{ ...actionButtonStyle, marginLeft: "10px" }}
-        >
-          Reset
-        </button>
+        {!solved && (
+          <>
+            <button
+              onClick={submit}
+              style={actionButtonStyle}
+              disabled={gameOver}
+            >
+              Submit
+            </button>
+            <button
+              onClick={reset}
+              style={{ ...actionButtonStyle, marginLeft: "10px" }}
+            >
+              Reset
+            </button>
+          </>
+        )}
+        {solved && (
+          <button
+            onClick={() => {
+  console.log("Navigating to chatroom with:", { roomCode, username });
+  navigate("/chatroom", { state: { roomCode, username } });
+}}
+            style={{
+              ...actionButtonStyle,
+              background: "#4caf50",
+              border: "2px solid #2e7d32",
+            }}
+          >
+            Continue
+          </button>
+        )}
       </div>
 
       <p style={{ marginTop: "10px" }}>{msg}</p>
+
+      {solved && (
+        <div
+          style={{
+            background: "#2b1d11",
+            color: "#f3e0c5",
+            border: "2px solid #d4af37",
+            borderRadius: "10px",
+            padding: "20px",
+            marginTop: "20px",
+            width: "80%",
+            maxWidth: "500px",
+            textAlign: "left",
+          }}
+        >
+          <h3 style={{ color: "#d4af37" }}>[FORENSICS REPORT]</h3>
+          <p>
+            You are matching a partial, smudged fingerprint found on the inside
+            of the chair's power-conduit panel, which was forced open.
+          </p>
+          <p>
+            After careful analysis, the print is a <b>6-point match</b> for{" "}
+            <b>Marcus Cole (Security Chief)</b>.
+          </p>
+          <p>
+            The print was mixed with a <b>graphite-based lubricant</b>, the same
+            kind used to silence squeaky door hinges.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
 
-// Reusable button styles
 const arrowStyle = {
   background: "#d4af37",
   color: "#3e2c1c",

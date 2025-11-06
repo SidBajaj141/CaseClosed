@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from "react";
+import { useLocation,useNavigate } from "react-router-dom";
 
 export default function Interrogator({ onComplete }) {
+  const { state } = useLocation(); 
+  const { username, roomCode } = state || {};
   const suspects = [
     {
       name: "Dr. Aris Thorne",
@@ -20,11 +23,13 @@ export default function Interrogator({ onComplete }) {
     },
   ];
 
+  const navigate = useNavigate();
   const [index, setIndex] = useState(0);
   const [display, setDisplay] = useState("");
   const [typing, setTyping] = useState(false);
   const [showChoices, setShowChoices] = useState(false);
   const [guesses, setGuesses] = useState([]);
+  const [showLog, setShowLog] = useState(false);
 
   const typeText = (text, callback) => {
     let i = 0;
@@ -32,7 +37,6 @@ export default function Interrogator({ onComplete }) {
     setTyping(true);
 
     const interval = setInterval(() => {
-      // Stop before we exceed string length
       if (i < text.length) {
         setDisplay((prev) => prev + text.charAt(i));
         i++;
@@ -49,9 +53,13 @@ export default function Interrogator({ onComplete }) {
 
   const startRound = (idx) => {
     if (idx >= suspects.length) {
-      typeText("> Interrogation session complete.\n> Results logged.", () => {
-        if (onComplete) onComplete(guesses);
-      });
+      typeText(
+        "> Interrogation session complete.\n> Compiling field notes...",
+        () => {
+          setShowLog(true);
+          if (onComplete) onComplete(guesses);
+        }
+      );
       return;
     }
 
@@ -69,7 +77,6 @@ export default function Interrogator({ onComplete }) {
       suspect: s.name,
       statement: s.statement,
       guessedTruth: guess === "truth",
-      actualTruth: s.truth,
     };
     setGuesses((prev) => [...prev, newEntry]);
     setShowChoices(false);
@@ -100,67 +107,127 @@ export default function Interrogator({ onComplete }) {
     >
       <h2 style={{ color: "#d4af37" }}>Interrogation Terminal</h2>
 
-      <div
-        style={{
-          background: "#2e1f13",
-          border: "2px solid #d4af37",
-          borderRadius: "8px",
-          padding: "20px",
-          width: "80%",
-          height: "300px",
-          whiteSpace: "pre-line",
-          overflowY: "auto",
-          fontSize: "1rem",
-        }}
-      >
-        {display}
-      </div>
-
-      {showChoices && (
-        <div style={{ marginTop: "1.5rem", display: "flex", gap: "15px" }}>
-          <button
-            onClick={() => handleGuess("truth")}
-            disabled={typing}
+      {!showLog ? (
+        <>
+          <div
             style={{
-              padding: "10px 20px",
-              background: "#28a745",
-              color: "#fff",
-              fontWeight: "bold",
-              border: "2px solid #1e7e34",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
+              background: "#2e1f13",
+              border: "2px solid #d4af37",
+              borderRadius: "8px",
+              padding: "20px",
+              width: "80%",
+              height: "300px",
+              whiteSpace: "pre-line",
+              overflowY: "auto",
+              fontSize: "1rem",
             }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "#218838")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "#28a745")
-            }
           >
-            Truth
-          </button>
+            {display}
+          </div>
 
-          <button
-            onClick={() => handleGuess("lie")}
-            disabled={typing}
-            style={{
-              padding: "10px 20px",
-              background: "#dc3545",
-              color: "#fff",
-              fontWeight: "bold",
-              border: "2px solid #b52a37",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
-            onMouseEnter={(e) =>
-              (e.currentTarget.style.background = "#c82333")
-            }
-            onMouseLeave={(e) =>
-              (e.currentTarget.style.background = "#dc3545")
-            }
-          >
-            Lie
-          </button>
+          {showChoices && (
+            <div style={{ marginTop: "1.5rem", display: "flex", gap: "15px" }}>
+              <button
+                onClick={() => handleGuess("truth")}
+                disabled={typing}
+                style={{
+                  padding: "10px 20px",
+                  background: "#28a745",
+                  color: "#fff",
+                  fontWeight: "bold",
+                  border: "2px solid #1e7e34",
+                  cursor: "pointer",
+                }}
+              >
+                Truth
+              </button>
+
+              <button
+                onClick={() => handleGuess("lie")}
+                disabled={typing}
+                style={{
+                  padding: "10px 20px",
+                  background: "#dc3545",
+                  color: "#fff",
+                  fontWeight: "bold",
+                  border: "2px solid #b52a37",
+                  cursor: "pointer",
+                }}
+              >
+                Lie
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div
+          style={{
+            background: "#2e1f13",
+            border: "2px solid #d4af37",
+            borderRadius: "8px",
+            padding: "20px",
+            width: "80%",
+            minHeight: "300px",
+            fontSize: "1rem",
+            overflowY: "auto",
+            textAlign: "left",
+          }}
+        >
+          <h3 style={{ color: "#d4af37", marginBottom: "1rem" }}>
+            🗒 Field Notes — Interrogation Log
+          </h3>
+          {guesses.map((g, i) => (
+            <div
+              key={i}
+              style={{
+                marginBottom: "1rem",
+                paddingBottom: "0.5rem",
+                borderBottom: "1px solid #d4af37",
+              }}
+            >
+              <p>
+                <strong>{g.suspect}</strong>: "{g.statement}"
+              </p>
+              <p>
+                ▶ You marked this as:{" "}
+                <span
+                  style={{
+                    color: g.guessedTruth ? "#28a745" : "#dc3545",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {g.guessedTruth ? "Truth" : "Lie"}
+                </span>
+              </p>
+            </div>
+          ))}
+
+          <div style={{ textAlign: "center", marginTop: "1.5rem" }}>
+            <button
+              onClick={() => {
+  console.log("Navigating to chatroom with:", { roomCode, username });
+  navigate("/chatroom", { state: { roomCode, username } });
+}}
+              style={{
+                padding: "12px 28px",
+                background: "#d4af37",
+                color: "#3e2c1c",
+                fontWeight: "bold",
+                border: "2px solid #b88b2b",
+                borderRadius: "6px",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#c29e36")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#d4af37")
+              }
+            >
+              Continue →
+            </button>
+          </div>
         </div>
       )}
     </div>
